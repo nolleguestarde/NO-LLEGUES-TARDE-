@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "proyecto",
-    "slug": "proyecto",
+    "name": "No Llegues Tarde",
+    "slug": "no-llegues-tarde",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
