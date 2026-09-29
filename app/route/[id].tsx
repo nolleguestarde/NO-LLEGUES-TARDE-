@@ -6,10 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CompanyBadge } from '@/components/app/company-badge';
 import { ManizalesMap } from '@/components/app/manizales-map';
+import { busesToPayload, featuresToMarkers, routeToPayload } from '@/components/app/map-payload';
 import { OccupancyBadge } from '@/components/app/occupancy-badge';
 import { RouteBadge } from '@/components/app/route-badge';
 import { SimulatedTag, VerifiedTag } from '@/components/app/simulated-tag';
 import { getCompanyById } from '@/data/companies';
+import { getFeatureById, getRouteFeatures } from '@/data/map';
 import { getPlaceById } from '@/data/places';
 import { getRouteById } from '@/data/routes';
 import { getScheduleForRoute } from '@/data/schedules';
@@ -21,6 +23,17 @@ export default function RouteDetailScreen() {
   const route = getRouteById(id ?? '');
 
   const buses = useSimulatedBuses(route, 2);
+
+  const mapData = React.useMemo(() => {
+    if (!route) return null;
+    const routeFeatures = getRouteFeatures(route);
+    return {
+      markers: featuresToMarkers(routeFeatures, { actionLabel: null }),
+      routes: [routeToPayload(route, true)],
+      buses: busesToPayload(buses),
+      fitToContent: true,
+    };
+  }, [route, buses]);
 
   if (!route) {
     return (
@@ -34,7 +47,6 @@ export default function RouteDetailScreen() {
   const schedule = getScheduleForRoute(route.id);
   const stopEntities = route.stopIds.map((sid) => getStopById(sid)).filter(Boolean);
   const placeEntities = route.placeIds.map((pid) => getPlaceById(pid)).filter(Boolean);
-  const routePath = [...stopEntities, ...placeEntities].map((e) => e!.coordinates);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -63,14 +75,27 @@ export default function RouteDetailScreen() {
           {route.note && <Text style={styles.note}>{route.note}</Text>}
         </View>
 
-        <View style={styles.mapWrap}>
-          <ManizalesMap
-            routePath={routePath}
-            places={placeEntities.map((p) => ({ id: p!.id, coordinate: p!.coordinates, title: p!.name }))}
-            stops={stopEntities.map((s) => ({ id: s!.id, coordinate: s!.coordinates, title: s!.name }))}
-            buses={buses.map((b) => ({ id: b.id, coordinate: b.simulatedLocation, title: `Buseta ${b.plate}` }))}
-          />
-        </View>
+        {mapData && (
+          <>
+            <View style={styles.mapWrap}>
+              <ManizalesMap
+                data={mapData}
+                onSelectMarker={(featureId) => {
+                  const feat = getFeatureById(featureId);
+                  if (feat?.kind === 'place') {
+                    router.push(`/place/${feat.entityId}`);
+                  }
+                }}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.mapLink}
+              onPress={() => router.push({ pathname: '/(tabs)/map', params: { route: route.id } })}>
+              <Ionicons name="map" size={16} color="#0a7ea4" />
+              <Text style={styles.mapLinkText}>Ver esta ruta en el mapa completo</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <Text style={styles.sectionTitle}>Busetas simuladas</Text>
         {buses.map((bus) => (
@@ -170,5 +195,16 @@ const styles = StyleSheet.create({
   },
   scheduleDay: { fontWeight: '700', fontSize: 13, color: '#11181C', textTransform: 'capitalize' },
   scheduleValue: { fontSize: 12, color: '#5b6770' },
+  mapLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: '#eef6fb',
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  mapLinkText: { fontSize: 13, fontWeight: '700', color: '#0a7ea4' },
 });
 

@@ -1,59 +1,86 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Coordinates } from '@/data/types';
-import { MapBusMarker, MapPlaceMarker } from './manizales-map';
+import { buildLeafletHtml, MapDataPayload, MapOutgoingMessage } from './leaflet-map-html';
+
+export type { MapDataPayload } from './leaflet-map-html';
 
 export interface ManizalesMapProps {
-  places?: MapPlaceMarker[];
-  stops?: MapPlaceMarker[];
-  routePath?: Coordinates[];
-  buses?: MapBusMarker[];
-  onSelectPlace?: (id: string) => void;
+  data: MapDataPayload;
+  onSelectMarker?: (id: string) => void;
+  onMarkerAction?: (id: string) => void;
+  onSelectRoute?: (id: string) => void;
   style?: object;
 }
 
 /**
- * En web, react-native-maps no está soportado sin configuración adicional
- * (Google Maps JS API). Para no romper la experiencia, mostramos un listado
- * esquemático de los mismos puntos que se verían en el mapa nativo. La
- * versión móvil (iOS/Android) usa el mapa real de Manizales.
+ * Mapa interactivo de Manizales para Expo Web.
+ *
+ * Usa exactamente el mismo documento Leaflet + OpenStreetMap que la versión
+ * nativa (`leaflet-map-html.ts`), pero dentro de un <iframe> porque
+ * react-native-webview no está disponible en web. Así web y móvil muestran
+ * el mismo mapa real, con los mismos datos y sin costo ni API key.
  */
-export function ManizalesMap({ places = [], stops = [], buses = [], style }: ManizalesMapProps) {
+export function ManizalesMap({
+  data,
+  onSelectMarker,
+  onMarkerAction,
+  onSelectRoute,
+  style,
+}: ManizalesMapProps) {
+  const frameRef = React.useRef<HTMLIFrameElement | null>(null);
+  const readyRef = React.useRef(false);
+  const dataRef = React.useRef(data);
+  dataRef.current = data;
+
+  const html = React.useMemo(() => buildLeafletHtml(data), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const post = React.useCallback((payload: MapDataPayload) => {
+    frameRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ type: 'data', data: payload }),
+      '*'
+    );
+  }, []);
+
+  React.useEffect(() => {
+    if (readyRef.current) post(data);
+  }, [data, post]);
+
+  React.useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (typeof event.data !== 'string') return;
+      let message: MapOutgoingMessage;
+      try {
+        message = JSON.parse(event.data) as MapOutgoingMessage;
+      } catch {
+        return;
+      }
+      if (message.type === 'ready') {
+        readyRef.current = true;
+        post(dataRef.current);
+        return;
+      }
+      if (message.type === 'marker-press') onSelectMarker?.(message.id);
+      if (message.type === 'marker-action') onMarkerAction?.(message.id);
+      if (message.type === 'route-press') onSelectRoute?.(message.id);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [post, onSelectMarker, onMarkerAction, onSelectRoute]);
+
   return (
     <View style={[styles.container, style]}>
-      <Text style={styles.notice}>
-        Vista de mapa simplificada para web. Abre la app en Android/iOS (Expo Go) para ver el
-        mapa interactivo de Manizales.
-      </Text>
-      <ScrollView>
-        {places.map((p) => (
-          <View key={p.id} style={styles.row}>
-            <View style={[styles.dot, { backgroundColor: p.color ?? '#0a7ea4' }]} />
-            <Text style={styles.rowText}>{p.title}</Text>
-          </View>
-        ))}
-        {stops.map((s) => (
-          <View key={s.id} style={styles.row}>
-            <View style={[styles.dot, { backgroundColor: '#e65100' }]} />
-            <Text style={styles.rowText}>{s.title}</Text>
-          </View>
-        ))}
-        {buses.map((b) => (
-          <View key={b.id} style={styles.row}>
-            <View style={[styles.dot, { backgroundColor: '#2e7d32' }]} />
-            <Text style={styles.rowText}>{b.title}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      <iframe
+        ref={frameRef}
+        title="Mapa de Manizales"
+        srcDoc={html}
+        style={{ border: 0, width: '100%', height: '100%', display: 'block' }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#f0f4f7', borderRadius: 16, padding: 14 },
-  notice: { fontSize: 12, color: '#5b6770', marginBottom: 10 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  rowText: { fontSize: 13, color: '#11181C' },
+  container: { flex: 1, minHeight: 200, backgroundColor: '#e8eef2', overflow: 'hidden' },
 });
+

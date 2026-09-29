@@ -15,8 +15,15 @@
 - Navegación: tabs (Inicio, Rutas, Mapa, Empresas, Avisos) + stack screens
   (detalle de ruta, detalle de empresa, detalle de lugar, lugares, horarios,
   reportes, búsqueda).
-- Mapa nativo con `react-native-maps` (instalado vía `expo install`) centrado
-  en Manizales; fallback de lista para web (`.web.tsx`).
+- Navegación: tabs (Inicio, Rutas, Mapa, Empresas, Avisos) + stack screens
+  (detalle de ruta, detalle de empresa, detalle de lugar, lugares, horarios,
+  reportes, búsqueda).
+- Mapa interactivo 100% gratuito con OpenStreetMap + Leaflet:
+  - Móvil (Android / iOS): renderizado en WebView (`react-native-webview`) con tiles directos de OpenStreetMap y baseUrl segura.
+  - Web: renderizado en `<iframe>` con comunicación bidireccional vía `postMessage`.
+  - Sin costo, sin necesidad de tarjeta ni Google Maps API Key.
+  - Soporta filtros por categorías, búsqueda de sitios/paraderos, popups informativos con navegación a detalle y animación de busetas en tiempo real sin parpadeos ni reinicio de zoom.
+  - Integrado en: pestaña principal de Mapa (`app/(tabs)/map.tsx`), Detalle de Lugar (`app/place/[id].tsx`) y Detalle de Ruta (`app/route/[id].tsx`).
 - Simulación de busetas: posición interpolada entre paraderos/lugares,
   ocupación y tiempo de llegada simulados, con "tick" periódico
   (`hooks/use-simulated-buses.ts`).
@@ -25,18 +32,14 @@
 - Notificaciones/avisos simulados con etiquetas claras de "Simulado".
 - Etiquetas `VerifiedTag`/`SimulatedTag` reutilizables para nunca confundir
   dato real con dato simulado.
-- `tsc --noEmit`: sin errores. `expo lint`: sin errores (se corrigió
-  `eslint.config.js` para ESM, requerido por `"type": "module"` en
-  package.json).
-- `expo export --platform web`: bundling exitoso de las 20 rutas estáticas
-  (fallo posterior de escritura de un asset fue por bloqueo de archivo de
-  OneDrive, no del código).
+- `tsc --noEmit`: 0 errores.
+- `expo lint`: 0 errores / 0 advertencias.
+- `expo export --platform web`: exportación estática de las 20 rutas completada con éxito.
+- Pruebas automatizadas de navegador (browser subagent) ejecutadas con éxito en `http://localhost:8081`.
 
 ### Decisiones técnicas
-- No se creó backend adicional; se usa `server.js` existente sin tocar.
-- `react-native-maps@1.20.1` instalado (única dependencia nueva, necesaria
-  para el requisito de mapa). Sin API key configurada (no requerida para
-  pruebas en Expo Go con proveedor por defecto).
+- No se requiere backend adicional; se usa `server.js` existente sin tocar.
+- Solución cartográfica: Leaflet + OpenStreetMap (100% libre, sin API key).
 - Arquitectura de "proveedor de ubicación" (`BusLocationProvider` en
   `data/buses.ts`) para poder reemplazar la simulación por GPS/API real sin
   tocar pantallas.
